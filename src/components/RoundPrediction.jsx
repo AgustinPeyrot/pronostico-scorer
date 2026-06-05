@@ -2,15 +2,10 @@
 // Paso A: cada jugador carga su pedido para la ronda actual.
 //
 // Modo libre:    todos pueden pedir entre 0 y cartas_de_la_ronda sin restricción.
-// Modo con restricción ('obligado' internamente):
+// Modo desafío ('obligado' internamente):
 //   - El jugador que reparte pide último.
-//   - No puede elegir el valor que haría que la suma total de pedidos
-//     sea igual a la cantidad de cartas de la ronda.
-//   - Fórmula: sumaDeLosDemás + pedidoUltimoJugador ≠ cartasRonda
-//
-// La suma total de pedidos NO está limitada (puede ser mayor, menor o igual
-// a la cantidad de cartas de la ronda). La única restricción es individual:
-//   mínimo 0, máximo cartas_de_la_ronda.
+//   - No puede pedir el valor que haría que la suma total sea igual a las cartas.
+//   - Fórmula: sumaDeLosDemás + pedidoDelUltimo ≠ cartasRonda
 
 import { useState } from 'react';
 import NumberStepper from './NumberStepper';
@@ -29,14 +24,12 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
   const totalRounds = rounds.length;
 
   const gameMode = config.gameMode || 'libre';
-  const isRestringido = gameMode === 'obligado'; // valor interno 'obligado' = "Modo con restricción"
+  // Valor interno 'obligado' = modo desafío en UI
+  const isDesafio = gameMode === 'obligado';
 
-  // ── Repartidor ─────────────────────────────────────────────────────────────
   const dealer = getDealerForRound(roundIndex, players);
-  // En modo con restricción el repartidor pide último; en libre, orden normal
   const predictionOrder = getPredictionOrder(players, dealer.id, gameMode);
 
-  // ── Estado: pedidos ────────────────────────────────────────────────────────
   const [predictions, setPredictions] = useState(
     Object.fromEntries(players.map((p) => [p.id, 0]))
   );
@@ -44,22 +37,19 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
   const updatePrediction = (playerId, value) =>
     setPredictions((prev) => ({ ...prev, [playerId]: value }));
 
-  // ── Valor prohibido para el repartidor (solo modo con restricción) ──────────
-  // Recalculado reactivamente. Es el único número que el repartidor no puede pedir.
-  const nonDealerPredictionValues = isRestringido
+  // Valor prohibido para el repartidor (solo modo desafío)
+  const nonDealerValues = isDesafio
     ? players.filter((p) => p.id !== dealer.id).map((p) => predictions[p.id])
     : [];
-  const forbidden = isRestringido
-    ? getForbiddenDealerPrediction(cards, nonDealerPredictionValues)
+  const forbidden = isDesafio
+    ? getForbiddenDealerPrediction(cards, nonDealerValues)
     : null;
 
-  // Suma de pedidos de los demás (para mostrar en el mensaje explicativo)
-  const sumOfOthers = nonDealerPredictionValues.reduce((a, b) => a + b, 0);
+  const sumOfOthers = nonDealerValues.reduce((a, b) => a + b, 0);
 
   const dealerPredictionInvalid =
-    isRestringido && !isDealerPredictionValid(predictions[dealer.id], forbidden);
+    isDesafio && !isDealerPredictionValid(predictions[dealer.id], forbidden);
 
-  // ── Confirmar pedidos ──────────────────────────────────────────────────────
   const handleConfirm = () => {
     if (dealerPredictionInvalid) return;
     const result = players.map((p) => ({
@@ -76,9 +66,7 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
       <header className="bg-indigo-700 px-4 py-4 shadow-lg">
         <div className="max-w-lg mx-auto">
 
-          {/* Fila superior: ronda + cartas + botones */}
           <div className="flex items-start justify-between gap-3 flex-wrap">
-            {/* Info de ronda */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-indigo-200 text-sm font-medium">
                 Ronda {roundNumber} / {totalRounds}
@@ -88,7 +76,6 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
               </span>
             </div>
 
-            {/* Botones sólidos */}
             <div className="flex gap-2 shrink-0">
               <button
                 id="history-btn"
@@ -111,17 +98,16 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
             </div>
           </div>
 
-          {/* Título + quién reparte */}
           <div className="mt-2">
             <h2 className="text-white text-xl font-bold">Pedidos</h2>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <span className="text-indigo-200 text-xs">
                 🃏 Reparte: <span className="font-semibold text-white">{dealer.name}</span>
               </span>
-              {isRestringido && (
+              {isDesafio && (
                 <span className="bg-amber-500/20 text-amber-300 text-xs px-2 py-0.5 rounded-full
                                  border border-amber-400/40">
-                  Modo con restricción · pide último
+                  ⚡ Modo desafío · pide último
                 </span>
               )}
             </div>
@@ -135,24 +121,24 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
           {predictionOrder.map((player, orderIdx) => {
             const isDealer = player.id === dealer.id;
             const currentVal = predictions[player.id];
-            const stepperForbidden = isRestringido && isDealer ? forbidden : null;
-            const isInvalid = isDealer && isRestringido && !isDealerPredictionValid(currentVal, forbidden);
+            const stepperForbidden = isDesafio && isDealer ? forbidden : null;
+            const isInvalid = isDealer && isDesafio && !isDealerPredictionValid(currentVal, forbidden);
 
             return (
               <div
                 key={player.id}
                 className={`backdrop-blur rounded-xl px-4 py-4 border transition-all
-                  ${isDealer && isRestringido
+                  ${isDealer && isDesafio
                     ? isInvalid
                       ? 'bg-red-500/10 border-red-400/60'
                       : 'bg-amber-500/10 border-amber-400/50'
                     : 'bg-white/10 border-white/20'}`}
               >
-                {/* Nombre + badge + número de orden */}
+                {/* Nombre + badge */}
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-white font-semibold">{player.name}</p>
-                    {isDealer && isRestringido && (
+                    {isDealer && isDesafio && (
                       <span className="bg-amber-500/30 text-amber-300 text-xs px-2 py-0.5
                                        rounded-full border border-amber-400/50">
                         Reparte · pide último
@@ -165,7 +151,7 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
                 {/* Stepper */}
                 <div className="flex items-center justify-between mt-2">
                   <p className="text-slate-400 text-xs">
-                    {isDealer && isRestringido ? 'Su pedido' : '¿Cuántas manos creés que vas a ganar?'}
+                    ¿Cuántas manos creés que vas a ganar?
                   </p>
                   <NumberStepper
                     value={currentVal}
@@ -176,25 +162,27 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
                   />
                 </div>
 
-                {/* Advertencia: repartidor está en valor prohibido */}
-                {isDealer && isRestringido && isInvalid && forbidden !== null && (
+                {/* Advertencia: repartidor en valor prohibido */}
+                {isDealer && isDesafio && isInvalid && forbidden !== null && (
                   <div className="mt-2 bg-red-500/20 rounded-lg px-3 py-2">
                     <p className="text-red-300 text-xs font-medium">
-                      ⚠️ En este modo, <strong>{player.name}</strong> no puede pedir{' '}
+                      ⚠️ En modo desafío,{' '}
+                      <strong>{player.name}</strong> no puede pedir{' '}
                       <strong>{forbidden}</strong> porque permitiría que todos cumplan.
                     </p>
-                    <p className="text-red-300/70 text-xs mt-1">
-                      Pedidos previos: {sumOfOthers} · Cartas de la ronda: {cards} · No permitido: {forbidden}
+                    <p className="text-red-300/60 text-xs mt-1">
+                      Pedidos previos: {sumOfOthers} · Cartas: {cards} · No permitido: {forbidden}
                     </p>
                   </div>
                 )}
 
-                {/* Info proactiva: valor prohibido cuando no está en él todavía */}
-                {isDealer && isRestringido && !isInvalid && forbidden !== null && (
+                {/* Info proactiva: valor prohibido (cuando no está en él) */}
+                {isDealer && isDesafio && !isInvalid && forbidden !== null && (
                   <p className="mt-2 text-amber-300/70 text-xs">
-                    No puede pedir: <strong className="text-amber-300">{forbidden}</strong>
+                    No puede pedir:{' '}
+                    <strong className="text-amber-300">{forbidden}</strong>
                     <span className="text-amber-300/50 ml-1">
-                      (pedidos previos {sumOfOthers} + {forbidden} = {cards} cartas)
+                      ({sumOfOthers} + {forbidden} = {cards} cartas)
                     </span>
                   </p>
                 )}

@@ -3,10 +3,9 @@
 //
 // Modalidades:
 //   'libre'    → todos pueden pedir libremente
-//   'obligado' → el jugador que pide último queda condicionado (valor interno sin cambio
-//                para compatibilidad con localStorage ya existente)
+//   'obligado' → modo desafío (valor interno sin cambio para compat localStorage)
 //
-// Validaciones de inputs numéricos:
+// Validaciones:
 //   maxCards  → mínimo 1, máximo 15, default 7
 //   bonus     → mínimo 1, máximo 20, default 5
 
@@ -28,11 +27,9 @@ export default function GameSetup({ onStart }) {
   const [gameMode, setGameMode] = useState('libre');
   const [error, setError] = useState('');
 
-  // Valores numéricos para lógica y validación
   const maxCards = sanitizeIntegerInput(maxCardsStr, MAX_CARDS_MIN, MAX_CARDS_MAX, MAX_CARDS_DEFAULT);
   const bonus = sanitizeIntegerInput(bonusStr, BONUS_MIN, BONUS_MAX, BONUS_DEFAULT);
 
-  // ── Handlers para maxCards ────────────────────────────────────────────────
   const handleMaxCardsChange = (e) => {
     const digitsOnly = e.target.value.replace(/[^0-9]/g, '');
     if (digitsOnly === '') { setMaxCardsStr(''); return; }
@@ -42,7 +39,6 @@ export default function GameSetup({ onStart }) {
     setMaxCardsStr(String(sanitizeIntegerInput(maxCardsStr, MAX_CARDS_MIN, MAX_CARDS_MAX, MAX_CARDS_DEFAULT)));
   };
 
-  // ── Handlers para bonus ───────────────────────────────────────────────────
   const handleBonusChange = (e) => {
     const digitsOnly = e.target.value.replace(/[^0-9]/g, '');
     if (digitsOnly === '') { setBonusStr(''); return; }
@@ -52,12 +48,10 @@ export default function GameSetup({ onStart }) {
     setBonusStr(String(sanitizeIntegerInput(bonusStr, BONUS_MIN, BONUS_MAX, BONUS_DEFAULT)));
   };
 
-  // ── Jugadores ─────────────────────────────────────────────────────────────
   const addPlayer = () => setPlayers((prev) => [...prev, '']);
   const removePlayer = (idx) => setPlayers((prev) => prev.filter((_, i) => i !== idx));
   const updateName = (idx, value) => setPlayers((prev) => prev.map((n, i) => (i === idx ? value : n)));
 
-  // ── Iniciar ───────────────────────────────────────────────────────────────
   const handleStart = () => {
     const cleaned = players.map((n) => n.trim()).filter(Boolean);
     if (cleaned.length < 2) { setError('Necesitás al menos 2 jugadores.'); return; }
@@ -90,7 +84,7 @@ export default function GameSetup({ onStart }) {
 
       <div className="w-full max-w-lg bg-white/10 backdrop-blur rounded-2xl p-6 shadow-2xl border border-white/20">
 
-        {/* ── Modalidad de juego ──────────────────────────────────────────── */}
+        {/* ── Modalidad ───────────────────────────────────────────────────────── */}
         <section className="mb-6">
           <h2 className="text-white font-semibold text-sm uppercase tracking-widest mb-3">
             Modalidad de juego
@@ -116,17 +110,17 @@ export default function GameSetup({ onStart }) {
               )}
             </button>
 
-            {/* Modo con restricción (valor interno: 'obligado' para compat con localStorage) */}
+            {/* Modo desafío (valor interno: 'obligado' para compat con localStorage) */}
             <button
-              id="mode-restriccion-btn"
+              id="mode-desafio-btn"
               onClick={() => setGameMode('obligado')}
               className={`rounded-xl p-4 border text-left transition-all
                 ${gameMode === 'obligado'
                   ? 'border-amber-400 bg-amber-500/20 ring-1 ring-amber-400/60'
                   : 'border-white/20 bg-white/5 hover:bg-white/10'}`}
             >
-              <div className="text-2xl mb-2">🔒</div>
-              <p className="text-white font-semibold text-sm leading-tight">Modo con restricción</p>
+              <div className="text-2xl mb-2">⚡</div>
+              <p className="text-white font-semibold text-sm leading-tight">Modo desafío</p>
               <p className="text-amber-300/70 text-xs mt-1 leading-snug">
                 El jugador que pide último puede quedar condicionado para asegurar que no todos cumplan.
               </p>
@@ -139,7 +133,7 @@ export default function GameSetup({ onStart }) {
 
         <hr className="border-white/20 mb-6" />
 
-        {/* ── Configuración numérica ──────────────────────────────────────── */}
+        {/* ── Configuración ───────────────────────────────────────────────────── */}
         <section className="mb-6">
           <h2 className="text-white font-semibold text-sm uppercase tracking-widest mb-3">Configuración</h2>
           <div className="flex gap-3">
@@ -180,14 +174,12 @@ export default function GameSetup({ onStart }) {
               />
             </div>
           </div>
-          <p className="text-indigo-300/70 text-xs mt-2">
-            Rondas: {roundsPreview}
-          </p>
+          <p className="text-indigo-300/70 text-xs mt-2">Rondas: {roundsPreview}</p>
         </section>
 
         <hr className="border-white/20 mb-6" />
 
-        {/* ── Jugadores ───────────────────────────────────────────────────── */}
+        {/* ── Jugadores ───────────────────────────────────────────────────────── */}
         <section>
           <h2 className="text-white font-semibold text-sm uppercase tracking-widest mb-3">Jugadores</h2>
           <div className="flex flex-col gap-2">

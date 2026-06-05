@@ -9,7 +9,7 @@ import { getDealerForRound } from '../helpers/gameLogic';
 export default function RoundHistory({ game, onEditRound, onBack }) {
   const { players, rounds, roundHistory, config } = game;
   const gameMode = config.gameMode || 'libre';
-  const isRestringido = gameMode === 'obligado';
+  const isDesafio = gameMode === 'obligado'; // valor interno 'obligado' = modo desafío
 
   const [expanded, setExpanded] = useState(null);
   const toggle = (idx) => setExpanded((prev) => (prev === idx ? null : idx));
@@ -30,10 +30,10 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
           <h2 className="text-white text-xl font-bold">Historial de rondas</h2>
           {/* Badge de modalidad */}
           <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ml-auto
-            ${isRestringido
+            ${isDesafio
               ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
               : 'bg-indigo-500/20 text-indigo-300 border-indigo-400/40'}`}>
-            {isRestringido ? '🔒 Con restricción' : '🎯 Libre'}
+            {isDesafio ? '⚡ Modo desafío' : '🎯 Modo libre'}
           </span>
         </div>
       </header>
@@ -79,9 +79,9 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
                   {/* Detalle expandible */}
                   {expanded === idx && (
                     <div className="px-4 pb-4 border-t border-white/10">
-                      {isRestringido && (
+                      {isDesafio && (
                         <p className="mt-3 text-amber-300/80 text-xs">
-                          🔒 Modo con restricción · Repartió:{' '}
+                          ⚡ Modo desafío · Repartió:{' '}
                           <span className="font-semibold">{dealer.name}</span>
                         </p>
                       )}
@@ -112,7 +112,7 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
                                       {player?.name}
                                     </span>
                                     {hit && <span className="ml-1 text-xs">✓</span>}
-                                    {isRoundDealer && isRestringido && (
+                                    {isRoundDealer && isDesafio && (
                                       <span className="ml-1 text-amber-400/70 text-xs" title="Repartió">🃏</span>
                                     )}
                                   </td>
