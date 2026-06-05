@@ -4,14 +4,24 @@
 
 import { useState } from 'react';
 import NumberStepper from './NumberStepper';
+import Footer from './Footer';
 import { calcPlayerRoundScore } from '../helpers/gameLogic';
 
-export default function RoundResults({ game, roundIndex, predictions, onClose, isEditing = false }) {
+export default function RoundResults({
+  game,
+  roundIndex,
+  predictions,
+  onClose,
+  isEditing = false,
+  onHistoryClick,
+  onResetClick,
+}) {
   const { players, rounds, config } = game;
   const cards = rounds[roundIndex];
   const roundNumber = roundIndex + 1;
+  const totalRounds = rounds.length;
 
-  // Estado local: bazas ganadas por cada jugador (inicializado en 0)
+  // Estado local: bazas ganadas por cada jugador
   const [won, setWon] = useState(
     Object.fromEntries(players.map((p) => {
       // Si estamos editando, pre-llenamos con los valores existentes
@@ -60,18 +70,50 @@ export default function RoundResults({ game, roundIndex, predictions, onClose, i
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-violet-950 flex flex-col">
-      {/* Header */}
-      <header className="bg-violet-600 px-4 py-4 shadow-lg">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between">
-            <span className="text-violet-200 text-sm font-medium">
-              {isEditing ? `Editando ronda ${roundNumber}` : `Ronda ${roundNumber} / ${rounds.length}`}
-            </span>
-            <span className="bg-white/20 text-white text-sm font-semibold px-3 py-1 rounded-full">
-              🃏 {cards} {cards === 1 ? 'carta' : 'cartas'}
-            </span>
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <header className="bg-violet-700 px-4 py-4 shadow-lg">
+        <div className="max-w-lg mx-auto">
+
+          {/* Fila superior: info de ronda + botones */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span className="text-violet-200 text-sm font-medium">
+                {isEditing
+                  ? `Editando ronda ${roundNumber}`
+                  : `Ronda ${roundNumber} / ${totalRounds}`}
+              </span>
+              <span className="bg-white/20 text-white text-sm font-semibold px-3 py-1 rounded-full">
+                🃏 {cards} {cards === 1 ? 'carta' : 'cartas'}
+              </span>
+            </div>
+
+            {/* Solo mostramos los botones cuando NO estamos en modo edición */}
+            {!isEditing && (
+              <div className="flex gap-2">
+                <button
+                  id="history-btn"
+                  onClick={onHistoryClick}
+                  className="bg-white/15 text-white text-xs px-3 py-1.5 rounded-full
+                             border border-white/30 hover:bg-white/25 active:bg-white/10
+                             transition-colors font-medium"
+                >
+                  📋 Historial
+                </button>
+                <button
+                  id="reset-btn"
+                  onClick={onResetClick}
+                  className="bg-red-500/20 text-red-300 text-xs px-3 py-1.5 rounded-full
+                             border border-red-400/40 hover:bg-red-500/30 active:bg-red-500/10
+                             transition-colors font-medium"
+                >
+                  ↺ Reiniciar
+                </button>
+              </div>
+            )}
           </div>
-          <h2 className="text-white text-xl font-bold mt-1">Resultados</h2>
+
+          {/* Título y estado de la suma */}
+          <h2 className="text-white text-xl font-bold mt-2">Resultados</h2>
           {/* Indicador de cuántas bazas faltan por asignar */}
           <p className={`text-sm font-medium mt-0.5 ${remainingColor}`}>
             {remaining === 0
@@ -83,8 +125,8 @@ export default function RoundResults({ game, roundIndex, predictions, onClose, i
         </div>
       </header>
 
-      {/* Lista de jugadores */}
-      <main className="flex-1 px-4 py-5 max-w-md mx-auto w-full">
+      {/* ── Lista de jugadores ───────────────────────────────────────────────── */}
+      <main className="flex-1 px-4 py-5 max-w-lg mx-auto w-full">
         <div className="flex flex-col gap-3">
           {players.map((player) => {
             const pred = predictions.find((pr) => pr.playerId === player.id);
@@ -136,8 +178,8 @@ export default function RoundResults({ game, roundIndex, predictions, onClose, i
         )}
       </main>
 
-      {/* Botón cerrar ronda */}
-      <footer className="px-4 pb-6 pt-2 max-w-md mx-auto w-full">
+      {/* ── Botón cerrar ronda ───────────────────────────────────────────────── */}
+      <footer className="px-4 pt-2 max-w-lg mx-auto w-full">
         <button
           id="close-round-btn"
           onClick={handleClose}
@@ -149,6 +191,8 @@ export default function RoundResults({ game, roundIndex, predictions, onClose, i
           {isEditing ? 'Guardar cambios ✓' : 'Cerrar ronda y sumar puntos →'}
         </button>
       </footer>
+
+      <Footer />
     </div>
   );
 }

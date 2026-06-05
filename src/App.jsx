@@ -4,7 +4,7 @@
 // Estado de la partida (game):
 //   players       → [{ id, name }]
 //   rounds        → [1, 2, ..., max, ..., 2, 1]  (secuencia de cartas por ronda)
-//   config        → { maxCards, bonus }
+//   config        → { maxCards, bonus, gameMode }  ← gameMode: 'libre' | 'obligado'
 //   roundHistory  → [{ roundIndex, results: [{ playerId, prediction, won, points }] }]
 //   totals        → { [playerId]: puntos acumulados }
 //   currentRound  → índice de la ronda actual (0-based)
@@ -23,25 +23,25 @@ import RoundResults from './components/RoundResults';
 import Scoreboard from './components/Scoreboard';
 import RoundHistory from './components/RoundHistory';
 import FinalScreen from './components/FinalScreen';
+import ConfirmModal from './components/ConfirmModal';
 import { generateRounds, recalcTotals } from './helpers/gameLogic';
 import { saveGame, loadGame, clearGame } from './helpers/storage';
 
-// ── Estado inicial (sin partida) ─────────────────────────────────────────────
 const INITIAL_STATE = {
-  screen: 'setup',     // vista actual
-  game: null,          // datos de la partida activa
-  currentPredictions: null, // pronósticos del paso A (en curso)
-  editingRoundIdx: null,    // si se está editando una ronda anterior
+  screen: 'setup',
+  game: null,
+  currentPredictions: null,
+  editingRoundIdx: null,
 };
 
 export default function App() {
   const [state, setState] = useState(() => {
-    // Al iniciar, intentamos restaurar la partida guardada
     const saved = loadGame();
     return saved ?? INITIAL_STATE;
   });
 
-  // Guarda en localStorage cada vez que el estado cambia
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+
   useEffect(() => {
     if (state.screen !== 'setup') {
       saveGame(state);
@@ -49,7 +49,8 @@ export default function App() {
   }, [state]);
 
   // ── Iniciar partida ─────────────────────────────────────────────────────────
-  const handleStart = useCallback(({ playerNames, maxCards, bonus }) => {
+  // Ahora también recibe gameMode desde GameSetup
+  const handleStart = useCallback(({ playerNames, maxCards, bonus, gameMode }) => {
     const players = playerNames.map((name, i) => ({
       id: `player-${i}-${Date.now()}`,
       name,
@@ -59,7 +60,7 @@ export default function App() {
     const game = {
       players,
       rounds,
-      config: { maxCards, bonus },
+      config: { maxCards, bonus, gameMode: gameMode || 'libre' },
       roundHistory: [],
       totals: Object.fromEntries(players.map((p) => [p.id, 0])),
       currentRound: 0,
@@ -84,16 +85,12 @@ export default function App() {
       const { game } = prev;
       const { roundHistory, players, config, rounds, currentRound } = game;
 
-      // Agrega la ronda al historial
       const newHistory = [
         ...roundHistory,
         { roundIndex: currentRound, results },
       ];
 
-      // Recalcula todos los totales desde cero (garantiza consistencia)
       const newTotals = recalcTotals(players, newHistory, config.bonus);
-
-      const isLastRound = currentRound >= rounds.length - 1;
 
       return {
         ...prev,
@@ -103,7 +100,6 @@ export default function App() {
           roundHistory: newHistory,
           totals: newTotals,
           phase: 'scoreboard',
-          currentRound: isLastRound ? currentRound : currentRound, // se avanza en handleNext
         },
       };
     });
@@ -133,7 +129,6 @@ export default function App() {
 
   // ── Editar ronda anterior ─────────────────────────────────────────────────
   const handleEditRound = useCallback((roundIdx) => {
-    // Guarda el índice de la ronda a editar y muestra el flujo de edición
     setState((prev) => ({
       ...prev,
       screen: 'editing',
@@ -147,14 +142,10 @@ export default function App() {
       const { game, editingRoundIdx } = prev;
       const { players, roundHistory, config } = game;
 
-      // Reemplaza la ronda editada en el historial
       const newHistory = roundHistory.map((r, i) =>
-        i === editingRoundIdx
-          ? { ...r, results }
-          : r
+        i === editingRoundIdx ? { ...r, results } : r
       );
 
-      // Recalcula todos los totales con el historial actualizado
       const newTotals = recalcTotals(players, newHistory, config.bonus);
 
       return {
@@ -176,23 +167,27 @@ export default function App() {
     setState(INITIAL_STATE);
   }, []);
 
-  // ── Reiniciar (volver al setup sin borrar jugadores) ──────────────────────
-  const handleReset = useCallback(() => {
-    if (window.confirm('¿Querés reiniciar la partida? Se perderán todos los datos.')) {
-      clearGame();
-      setState(INITIAL_STATE);
-    }
+  // ── Modal de reinicio ─────────────────────────────────────────────────────
+  const handleOpenResetModal = useCallback(() => setIsResetModalOpen(true), []);
+  const handleConfirmReset = useCallback(() => {
+    setIsResetModalOpen(false);
+    clearGame();
+    setState(INITIAL_STATE);
+  }, []);
+  const handleCancelReset = useCallback(() => setIsResetModalOpen(false), []);
+
+  // ── Ir al historial ──────────────────────────────────────────────────────
+  const handleGoHistory = useCallback(() => {
+    setState((prev) => ({ ...prev, screen: 'history' }));
   }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
   const { screen, game, currentPredictions, editingRoundIdx } = state;
 
-  // Pantalla de configuración inicial
   if (screen === 'setup') {
     return <GameSetup onStart={handleStart} />;
   }
 
-  // Pantalla final
   if (screen === 'final') {
     return (
       <FinalScreen
@@ -203,7 +198,6 @@ export default function App() {
     );
   }
 
-  // Historial de rondas
   if (screen === 'history') {
     return (
       <RoundHistory
@@ -217,16 +211,12 @@ export default function App() {
   // Modo edición de una ronda anterior
   if (screen === 'editing' && editingRoundIdx !== null) {
     const roundData = game.roundHistory[editingRoundIdx];
-    // Construye el array de predicciones con los datos existentes
     const editPredictions = roundData.results.map((r) => ({
       playerId: r.playerId,
       prediction: r.prediction,
-      won: r.won, // pre-carga los valores actuales en RoundResults
+      won: r.won,
     }));
 
-    // Mostramos primero RoundPrediction para editar pronósticos,
-    // luego RoundResults para editar resultados.
-    // Simplificación: abrimos directamente en RoundResults con edición integrada.
     return (
       <RoundResults
         game={game}
@@ -243,47 +233,35 @@ export default function App() {
     const { phase, currentRound } = game;
 
     return (
-      <div className="relative">
-        {/* Botones globales flotantes (historial + reset) */}
-        <div className="fixed top-3 right-3 z-50 flex gap-2">
-          <button
-            id="history-btn"
-            onClick={() => setState((prev) => ({ ...prev, screen: 'history' }))}
-            className="bg-white/15 backdrop-blur text-white text-xs px-3 py-2 rounded-full
-                       border border-white/30 hover:bg-white/25 transition-colors"
-          >
-            📋 Historial
-          </button>
-          <button
-            id="reset-btn"
-            onClick={handleReset}
-            className="bg-red-500/20 backdrop-blur text-red-300 text-xs px-3 py-2 rounded-full
-                       border border-red-500/40 hover:bg-red-500/30 transition-colors"
-          >
-            ↺ Reset
-          </button>
-        </div>
+      <>
+        {isResetModalOpen && (
+          <ConfirmModal
+            onConfirm={handleConfirmReset}
+            onCancel={handleCancelReset}
+          />
+        )}
 
-        {/* Fase A: pronósticos */}
         {phase === 'prediction' && (
           <RoundPrediction
             game={game}
             roundIndex={currentRound}
             onConfirm={handlePredictionsConfirmed}
+            onHistoryClick={handleGoHistory}
+            onResetClick={handleOpenResetModal}
           />
         )}
 
-        {/* Fase B: resultados */}
         {phase === 'results' && (
           <RoundResults
             game={game}
             roundIndex={currentRound}
             predictions={currentPredictions}
             onClose={handleRoundClosed}
+            onHistoryClick={handleGoHistory}
+            onResetClick={handleOpenResetModal}
           />
         )}
 
-        {/* Fase C: ranking */}
         {phase === 'scoreboard' && (
           <Scoreboard
             players={game.players}
@@ -291,9 +269,11 @@ export default function App() {
             onNext={handleNext}
             currentRoundIndex={currentRound}
             totalRounds={game.rounds.length}
+            onHistoryClick={handleGoHistory}
+            onResetClick={handleOpenResetModal}
           />
         )}
-      </div>
+      </>
     );
   }
 

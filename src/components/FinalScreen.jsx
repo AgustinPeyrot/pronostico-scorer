@@ -1,6 +1,8 @@
 // ── components/FinalScreen.jsx ───────────────────────────────────────────────
 // Pantalla final: muestra el ranking definitivo y al/los ganador/es.
 
+import Footer from './Footer';
+
 export default function FinalScreen({ players, totals, onNewGame }) {
   // Ordena de mayor a menor
   const ranked = [...players]
@@ -17,7 +19,7 @@ export default function FinalScreen({ players, totals, onNewGame }) {
     <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-violet-900 to-purple-950
                     flex flex-col items-center justify-center p-4">
       {/* Trofeo y título */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-6 w-full max-w-lg">
         <div className="text-6xl mb-3 animate-bounce">🏆</div>
         <h1 className="text-3xl font-extrabold text-white">¡Partida terminada!</h1>
 
@@ -42,7 +44,7 @@ export default function FinalScreen({ players, totals, onNewGame }) {
       </div>
 
       {/* Ranking final */}
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <h2 className="text-slate-400 text-xs font-medium uppercase tracking-widest mb-3 text-center">
           Ranking final
         </h2>
@@ -70,14 +72,18 @@ export default function FinalScreen({ players, totals, onNewGame }) {
       </div>
 
       {/* Nueva partida */}
-      <button
-        id="new-game-btn"
-        onClick={onNewGame}
-        className="mt-8 w-full max-w-md py-4 bg-indigo-500 hover:bg-indigo-400
-                   text-white font-bold text-lg rounded-xl shadow-lg transition-colors"
-      >
-        Nueva partida 🃏
-      </button>
+      <div className="w-full max-w-lg mt-8">
+        <button
+          id="new-game-btn"
+          onClick={onNewGame}
+          className="w-full py-4 bg-indigo-500 hover:bg-indigo-400
+                     text-white font-bold text-lg rounded-xl shadow-lg transition-colors"
+        >
+          Nueva partida 🃏
+        </button>
+      </div>
+
+      <Footer />
     </div>
   );
 }
