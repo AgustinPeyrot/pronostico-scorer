@@ -1,9 +1,8 @@
 // ── App.jsx ──────────────────────────────────────────────────────────────────
 // Componente raíz. Maneja el estado global de la partida y coordina las vistas.
 //
-// config ahora incluye: { maxCards, bonus, gameMode, limitPredictionSum }
-//   limitPredictionSum: boolean (default true) — controla si la suma de
-//   pronósticos puede superar la cantidad de cartas de la ronda.
+// config: { maxCards, bonus, gameMode }
+//   gameMode: 'libre' | 'obligado'
 
 import { useState, useEffect, useCallback } from 'react';
 import GameSetup from './components/GameSetup';
@@ -32,13 +31,11 @@ export default function App() {
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   useEffect(() => {
-    if (state.screen !== 'setup') {
-      saveGame(state);
-    }
+    if (state.screen !== 'setup') saveGame(state);
   }, [state]);
 
   // ── Iniciar partida ─────────────────────────────────────────────────────────
-  const handleStart = useCallback(({ playerNames, maxCards, bonus, gameMode, limitPredictionSum }) => {
+  const handleStart = useCallback(({ playerNames, maxCards, bonus, gameMode }) => {
     const players = playerNames.map((name, i) => ({
       id: `player-${i}-${Date.now()}`,
       name,
@@ -48,12 +45,7 @@ export default function App() {
     const game = {
       players,
       rounds,
-      config: {
-        maxCards,
-        bonus,
-        gameMode: gameMode || 'libre',
-        limitPredictionSum: limitPredictionSum !== false, // default true
-      },
+      config: { maxCards, bonus, gameMode: gameMode || 'libre' },
       roundHistory: [],
       totals: Object.fromEntries(players.map((p) => [p.id, 0])),
       currentRound: 0,
@@ -63,7 +55,7 @@ export default function App() {
     setState({ screen: 'playing', game, currentPredictions: null, editingRoundIdx: null });
   }, []);
 
-  // ── Paso A: pronósticos confirmados ──────────────────────────────────────
+  // ── Paso A: pedidos confirmados ────────────────────────────────────────────
   const handlePredictionsConfirmed = useCallback((predictions) => {
     setState((prev) => ({
       ...prev,
@@ -72,15 +64,13 @@ export default function App() {
     }));
   }, []);
 
-  // ── Paso B: resultado de ronda cargado ────────────────────────────────────
+  // ── Paso B: resultados de ronda cargados ──────────────────────────────────
   const handleRoundClosed = useCallback((results) => {
     setState((prev) => {
       const { game } = prev;
       const { roundHistory, players, config, currentRound } = game;
-
       const newHistory = [...roundHistory, { roundIndex: currentRound, results }];
       const newTotals = recalcTotals(players, newHistory, config.bonus);
-
       return {
         ...prev,
         currentPredictions: null,
@@ -89,17 +79,15 @@ export default function App() {
     });
   }, []);
 
-  // ── Avanzar a la próxima ronda o finalizar ────────────────────────────────
+  // ── Avanzar a siguiente ronda o finalizar ─────────────────────────────────
   const handleNext = useCallback(() => {
     setState((prev) => {
       const { game } = prev;
       const { currentRound, rounds } = game;
       const isLastRound = currentRound >= rounds.length - 1;
-
       if (isLastRound) {
         return { ...prev, screen: 'final', game: { ...game, phase: 'final' } };
       }
-
       return { ...prev, game: { ...game, currentRound: currentRound + 1, phase: 'prediction' } };
     });
   }, []);
@@ -114,12 +102,10 @@ export default function App() {
     setState((prev) => {
       const { game, editingRoundIdx } = prev;
       const { players, roundHistory, config } = game;
-
       const newHistory = roundHistory.map((r, i) =>
         i === editingRoundIdx ? { ...r, results } : r
       );
       const newTotals = recalcTotals(players, newHistory, config.bonus);
-
       return {
         ...prev,
         screen: 'history',
@@ -172,7 +158,6 @@ export default function App() {
       prediction: r.prediction,
       won: r.won,
     }));
-
     return (
       <RoundResults
         game={game}
@@ -186,13 +171,11 @@ export default function App() {
 
   if (screen === 'playing') {
     const { phase, currentRound } = game;
-
     return (
       <>
         {isResetModalOpen && (
           <ConfirmModal onConfirm={handleConfirmReset} onCancel={handleCancelReset} />
         )}
-
         {phase === 'prediction' && (
           <RoundPrediction
             game={game}
@@ -202,7 +185,6 @@ export default function App() {
             onResetClick={handleOpenResetModal}
           />
         )}
-
         {phase === 'results' && (
           <RoundResults
             game={game}
@@ -213,7 +195,6 @@ export default function App() {
             onResetClick={handleOpenResetModal}
           />
         )}
-
         {phase === 'scoreboard' && (
           <Scoreboard
             players={game.players}

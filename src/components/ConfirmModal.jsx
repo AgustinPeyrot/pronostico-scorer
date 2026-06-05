@@ -4,13 +4,11 @@
 
 export default function ConfirmModal({ onConfirm, onCancel }) {
   return (
-    // Fondo oscuro semi-transparente
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}
-      onClick={onCancel} // click afuera = cancelar
+      onClick={onCancel}
     >
-      {/* Caja del modal — stopPropagation para que el click interior no cierre */}
       <div
         className="w-full max-w-sm bg-slate-800 border border-white/20 rounded-2xl
                    shadow-2xl p-6 flex flex-col gap-5"
@@ -21,11 +19,11 @@ export default function ConfirmModal({ onConfirm, onCancel }) {
           <div className="text-4xl mb-3">⚠️</div>
           <h2 className="text-white text-xl font-bold">¿Reiniciar partida?</h2>
           <p className="text-slate-400 text-sm mt-2 leading-relaxed">
-            Se perderán todos los pronósticos, resultados y puntajes cargados.
+            Se perderán todos los pedidos, resultados y puntajes cargados.
           </p>
         </div>
 
-        {/* Botones */}
+        {/* Botones — "Sí, reiniciar" primero para acción destructiva explícita */}
         <div className="flex flex-col gap-3">
           <button
             id="confirm-reset-btn"

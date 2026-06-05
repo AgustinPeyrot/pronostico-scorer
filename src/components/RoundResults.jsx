@@ -1,13 +1,11 @@
 // ── components/RoundResults.jsx ──────────────────────────────────────────────
-// Paso B: se carga cuántas bazas ganó cada jugador.
+// Paso B: se carga cuántas manos ganó cada jugador.
 //
-// Nuevas funcionalidades:
-//   - El botón "+" se bloquea automáticamente cuando la suma de bazas ya
-//     alcanzó la cantidad de cartas de la ronda.
-//   - Max efectivo por jugador = currentVal + remaining, igual que en pronósticos.
-//   - Barra de progreso visual con contador X/Y.
-//   - Mensaje informativo cuando todos los resultados ya están asignados.
-//   - Validación al confirmar: suma total debe ser exactamente igual a cartas.
+// Reglas:
+//   - Mínimo 0, máximo cartas de la ronda, por jugador.
+//   - La suma total de manos ganadas debe ser exactamente igual a las cartas de la ronda.
+//   - El botón "+" se bloquea cuando ya no hay más manos disponibles para asignar.
+//   - El botón confirmar se habilita solo cuando la suma es exactamente correcta.
 
 import { useState } from 'react';
 import NumberStepper from './NumberStepper';
@@ -29,43 +27,39 @@ export default function RoundResults({
   const roundNumber = roundIndex + 1;
   const totalRounds = rounds.length;
 
-  // ── Estado: bazas ganadas por jugador ──────────────────────────────────────
+  // ── Estado: manos ganadas por jugador ──────────────────────────────────────
   const [won, setWon] = useState(
     Object.fromEntries(players.map((p) => {
-      // En modo edición pre-llenamos con valores existentes
       const existing = predictions.find((pr) => pr.playerId === p.id);
       return [p.id, existing?.won ?? 0];
     }))
   );
-
   const [error, setError] = useState('');
 
   const updateWon = (playerId, value) =>
     setWon((prev) => ({ ...prev, [playerId]: value }));
 
-  // ── Derivados: suma y restante ─────────────────────────────────────────────
+  // ── Derivados ─────────────────────────────────────────────────────────────
   const totalWon = sumValues(won);
-  const remaining = cards - totalWon;  // positivo: faltan bazas; negativo: nos pasamos
+  const remaining = cards - totalWon;
 
-  // ── Max efectivo por jugador ───────────────────────────────────────────────
-  // Bloquea el "+" cuando no hay más bazas disponibles para repartir.
-  // Fórmula: el jugador puede crecer hasta su valor actual + lo que queda global.
+  // Max efectivo por jugador: bloquea el "+" cuando no hay más manos disponibles
   const getPlayerMax = (playerId) => {
     const currentVal = won[playerId];
     return Math.min(cards, currentVal + Math.max(0, remaining));
   };
 
-  // ── Confirmar (validación final) ───────────────────────────────────────────
+  // ── Confirmar ──────────────────────────────────────────────────────────────
   const handleClose = () => {
     if (totalWon !== cards) {
       setError(
-        `La suma de bazas ganadas debe ser exactamente ${cards}. ` +
-        `Ahora suma ${totalWon} (${remaining > 0 ? `faltan ${remaining}` : `sobran ${-remaining}`}).`
+        `La suma de manos ganadas debe ser exactamente ${cards}. ` +
+        `Ahora suma ${totalWon} ` +
+        `(${remaining > 0 ? `faltan ${remaining}` : `sobran ${-remaining}`}).`
       );
       return;
     }
     setError('');
-
     const results = players.map((p) => {
       const pred = predictions.find((pr) => pr.playerId === p.id);
       const prediction = pred?.prediction ?? 0;
@@ -77,11 +71,10 @@ export default function RoundResults({
         points: calcPlayerRoundScore(prediction, wonValue, config.bonus),
       };
     });
-
     onClose(results);
   };
 
-  // ── Colores del indicador de suma ──────────────────────────────────────────
+  // ── Colores del indicador ─────────────────────────────────────────────────
   const remainingColor =
     remaining === 0 ? 'text-emerald-400' :
     remaining > 0   ? 'text-amber-400'   : 'text-red-400';
@@ -90,8 +83,6 @@ export default function RoundResults({
     remaining === 0 ? 'bg-emerald-400' :
     remaining < 0   ? 'bg-red-400'     : 'bg-white/60';
 
-  const showAllAssigned = remaining === 0;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-violet-950 flex flex-col">
 
@@ -99,36 +90,37 @@ export default function RoundResults({
       <header className="bg-violet-700 px-4 py-4 shadow-lg">
         <div className="max-w-lg mx-auto">
 
-          {/* Fila: info de ronda + botones */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-3">
+          {/* Fila superior: ronda + cartas + botones */}
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-violet-200 text-sm font-medium">
                 {isEditing
                   ? `Editando ronda ${roundNumber}`
                   : `Ronda ${roundNumber} / ${totalRounds}`}
               </span>
-              <span className="bg-white/20 text-white text-sm font-semibold px-3 py-1 rounded-full">
+              <span className="bg-white/20 text-white text-sm font-semibold px-3 py-0.5 rounded-full">
                 🃏 {cards} {cards === 1 ? 'carta' : 'cartas'}
               </span>
             </div>
 
+            {/* Botones sólidos — solo en modo normal, no en edición */}
             {!isEditing && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 shrink-0">
                 <button
                   id="history-btn"
                   onClick={onHistoryClick}
-                  className="bg-white/15 text-white text-xs px-3 py-1.5 rounded-full
-                             border border-white/30 hover:bg-white/25 active:bg-white/10
-                             transition-colors font-medium"
+                  className="flex items-center gap-1.5 bg-violet-900 hover:bg-violet-800
+                             active:bg-violet-950 text-white text-xs font-semibold
+                             px-3 py-2 rounded-lg shadow transition-colors"
                 >
                   📋 Historial
                 </button>
                 <button
                   id="reset-btn"
                   onClick={onResetClick}
-                  className="bg-red-500/20 text-red-300 text-xs px-3 py-1.5 rounded-full
-                             border border-red-400/40 hover:bg-red-500/30 active:bg-red-500/10
-                             transition-colors font-medium"
+                  className="flex items-center gap-1.5 bg-red-900/70 hover:bg-red-800/80
+                             active:bg-red-950 text-red-300 text-xs font-semibold
+                             px-3 py-2 rounded-lg shadow transition-colors"
                 >
                   ↺ Reiniciar
                 </button>
@@ -136,18 +128,19 @@ export default function RoundResults({
             )}
           </div>
 
-          <h2 className="text-white text-xl font-bold mt-2">Resultados</h2>
+          {/* Título + indicador textual */}
+          <div className="mt-2">
+            <h2 className="text-white text-xl font-bold">Resultados</h2>
+            <p className={`text-sm font-medium mt-0.5 ${remainingColor}`}>
+              {remaining === 0
+                ? '✓ Suma correcta — listo para confirmar'
+                : remaining > 0
+                ? `Faltan ${remaining} mano${remaining !== 1 ? 's' : ''} por asignar`
+                : `Te pasaste por ${Math.abs(remaining)} mano${Math.abs(remaining) !== 1 ? 's' : ''}`}
+            </p>
+          </div>
 
-          {/* Indicador textual */}
-          <p className={`text-sm font-medium mt-0.5 ${remainingColor}`}>
-            {remaining === 0
-              ? '✓ Suma correcta — listo para confirmar'
-              : remaining > 0
-              ? `Faltan ${remaining} baza${remaining !== 1 ? 's' : ''} por asignar`
-              : `Te pasaste por ${Math.abs(remaining)} baza${Math.abs(remaining) !== 1 ? 's' : ''}`}
-          </p>
-
-          {/* Barra de progreso de bazas */}
+          {/* Barra de progreso */}
           <div className="mt-2 flex items-center gap-2">
             <div className="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
               <div
@@ -156,7 +149,7 @@ export default function RoundResults({
               />
             </div>
             <span className={`text-xs font-medium whitespace-nowrap ${remainingColor}`}>
-              {totalWon}/{cards} bazas
+              {totalWon}/{cards} manos
             </span>
           </div>
         </div>
@@ -165,14 +158,14 @@ export default function RoundResults({
       {/* ── Lista de jugadores ─────────────────────────────────────────────────── */}
       <main className="flex-1 px-4 py-5 max-w-lg mx-auto w-full">
 
-        {/* Aviso global cuando todas las bazas están asignadas */}
-        {showAllAssigned && (
+        {/* Banner cuando todas las manos están asignadas */}
+        {remaining === 0 && (
           <div className="mb-3 bg-emerald-500/15 border border-emerald-400/40 rounded-xl px-4 py-2.5
-                          flex items-start gap-2">
-            <span className="text-emerald-400 text-sm">✓</span>
+                          flex items-center gap-2">
+            <span className="text-emerald-400">✓</span>
             <p className="text-emerald-200 text-sm">
-              Los resultados ya suman las {cards} baza{cards !== 1 ? 's' : ''} de la ronda.
-              Podés confirmar o ajustar bajando el valor de algún jugador.
+              Las {cards} mano{cards !== 1 ? 's' : ''} de la ronda están asignadas.
+              Podés confirmar o ajustar bajando algún valor.
             </p>
           </div>
         )}
@@ -210,9 +203,8 @@ export default function RoundResults({
                   </div>
                 </div>
 
-                {/* Stepper con max efectivo */}
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400 text-sm">Ganó:</span>
+                  <span className="text-slate-400 text-sm">Manos ganadas:</span>
                   <NumberStepper
                     value={wonValue}
                     onChange={(v) => updateWon(player.id, v)}
@@ -230,7 +222,7 @@ export default function RoundResults({
         )}
       </main>
 
-      {/* ── Botón cerrar ronda ─────────────────────────────────────────────────── */}
+      {/* ── Botón confirmar ────────────────────────────────────────────────────── */}
       <footer className="px-4 pt-2 max-w-lg mx-auto w-full">
         <button
           id="close-round-btn"

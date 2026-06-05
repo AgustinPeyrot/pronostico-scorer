@@ -1,6 +1,6 @@
 // ── components/RoundHistory.jsx ──────────────────────────────────────────────
-// Muestra el historial de rondas jugadas con opción de editar cada una.
-// En modo obligado muestra quién repartió en cada ronda.
+// Historial de rondas jugadas con opción de editar cada una.
+// Usa el término "pedido" y "mano" en lugar de "pronóstico" y "baza".
 
 import { useState } from 'react';
 import Footer from './Footer';
@@ -9,14 +9,15 @@ import { getDealerForRound } from '../helpers/gameLogic';
 export default function RoundHistory({ game, onEditRound, onBack }) {
   const { players, rounds, roundHistory, config } = game;
   const gameMode = config.gameMode || 'libre';
-  const isObligado = gameMode === 'obligado';
+  const isRestringido = gameMode === 'obligado';
 
   const [expanded, setExpanded] = useState(null);
   const toggle = (idx) => setExpanded((prev) => (prev === idx ? null : idx));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+
+      {/* ── Header ────────────────────────────────────────────────────────────── */}
       <header className="bg-slate-800 px-4 py-4 shadow-md border-b border-white/10">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <button
@@ -29,15 +30,15 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
           <h2 className="text-white text-xl font-bold">Historial de rondas</h2>
           {/* Badge de modalidad */}
           <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ml-auto
-            ${isObligado
+            ${isRestringido
               ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
               : 'bg-indigo-500/20 text-indigo-300 border-indigo-400/40'}`}>
-            {isObligado ? '🔒 Obligado' : '🎯 Libre'}
+            {isRestringido ? '🔒 Con restricción' : '🎯 Libre'}
           </span>
         </div>
       </header>
 
-      {/* ── Lista de rondas ──────────────────────────────────────────────────── */}
+      {/* ── Lista de rondas ───────────────────────────────────────────────────── */}
       <main className="flex-1 px-4 py-5 max-w-lg mx-auto w-full">
         {roundHistory.length === 0 ? (
           <p className="text-slate-500 text-center mt-12">
@@ -46,7 +47,6 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
         ) : (
           <div className="flex flex-col gap-3">
             {roundHistory.map((round, idx) => {
-              // El repartidor se calcula igual que en RoundPrediction
               const dealer = getDealerForRound(round.roundIndex, players);
 
               return (
@@ -67,7 +67,6 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
                       <span className="text-slate-400 text-xs">
                         · {rounds[round.roundIndex]} carta{rounds[round.roundIndex] !== 1 ? 's' : ''}
                       </span>
-                      {/* Quién repartió */}
                       <span className="text-slate-500 text-xs">
                         · Repartió: <span className="text-slate-400">{dealer.name}</span>
                       </span>
@@ -80,10 +79,9 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
                   {/* Detalle expandible */}
                   {expanded === idx && (
                     <div className="px-4 pb-4 border-t border-white/10">
-                      {/* Info del repartidor en modo obligado */}
-                      {isObligado && (
+                      {isRestringido && (
                         <p className="mt-3 text-amber-300/80 text-xs">
-                          🔒 Modo obligado · Repartió:{' '}
+                          🔒 Modo con restricción · Repartió:{' '}
                           <span className="font-semibold">{dealer.name}</span>
                         </p>
                       )}
@@ -109,18 +107,18 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
                                   key={r.playerId}
                                   className={hit ? 'text-emerald-400' : 'text-slate-300'}
                                 >
-                                  <td className="py-1 font-medium">
+                                  <td className="py-1.5 font-medium">
                                     <span className="truncate max-w-[100px] inline-block align-bottom">
                                       {player?.name}
                                     </span>
                                     {hit && <span className="ml-1 text-xs">✓</span>}
-                                    {isRoundDealer && isObligado && (
-                                      <span className="ml-1 text-amber-400/70 text-xs">🃏</span>
+                                    {isRoundDealer && isRestringido && (
+                                      <span className="ml-1 text-amber-400/70 text-xs" title="Repartió">🃏</span>
                                     )}
                                   </td>
-                                  <td className="text-center py-1 tabular-nums">{r.prediction}</td>
-                                  <td className="text-center py-1 tabular-nums">{r.won}</td>
-                                  <td className="text-right py-1 tabular-nums font-bold">+{r.points}</td>
+                                  <td className="text-center py-1.5 tabular-nums">{r.prediction}</td>
+                                  <td className="text-center py-1.5 tabular-nums">{r.won}</td>
+                                  <td className="text-right py-1.5 tabular-nums font-bold">+{r.points}</td>
                                 </tr>
                               );
                             })}
@@ -128,7 +126,26 @@ export default function RoundHistory({ game, onEditRound, onBack }) {
                         </table>
                       </div>
 
-                      {/* Botón editar */}
+                      {/* Resumen en formato legible: "Agus: pidió 2 / ganó 2 / sumó 7" */}
+                      <div className="mt-3 border-t border-white/10 pt-3 flex flex-col gap-1">
+                        {round.results.map((r) => {
+                          const player = players.find((p) => p.id === r.playerId);
+                          const hit = r.won === r.prediction;
+                          return (
+                            <p
+                              key={r.playerId}
+                              className={`text-xs ${hit ? 'text-emerald-400/80' : 'text-slate-500'}`}
+                            >
+                              <span className="font-medium">{player?.name}</span>
+                              {': pidió '}<span className="font-bold">{r.prediction}</span>
+                              {' / ganó '}<span className="font-bold">{r.won}</span>
+                              {' / sumó '}<span className="font-bold">+{r.points}</span>
+                              {hit && ' 🎯'}
+                            </p>
+                          );
+                        })}
+                      </div>
+
                       <button
                         id={`edit-round-${idx}-btn`}
                         onClick={() => onEditRound(idx)}
