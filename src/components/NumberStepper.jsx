@@ -1,20 +1,35 @@
 // ── components/NumberStepper.jsx ─────────────────────────────────────────────
 // Control reutilizable de tipo "− valor +" optimizado para móvil.
-// Soporta un valor prohibido (forbiddenValue) que el stepper salta automáticamente.
+//
+// Props:
+//   value            → número actual
+//   onChange         → callback(nuevoValor)
+//   min              → mínimo (default 0)
+//   max              → máximo (default sin límite)
+//   forbiddenValue   → valor que el stepper salta automáticamente (modo obligado)
+//   disabledIncrement → fuerza deshabilitar el botón + (p.ej. suma global alcanzada)
+//   disabledDecrement → fuerza deshabilitar el botón -
 
-export default function NumberStepper({ value, onChange, min = 0, max, forbiddenValue = null }) {
+export default function NumberStepper({
+  value,
+  onChange,
+  min = 0,
+  max,
+  forbiddenValue = null,
+  disabledIncrement = false,
+  disabledDecrement = false,
+}) {
 
-  // Al decrementar: si el siguiente valor es el prohibido, saltamos uno más abajo
+  // Al decrementar: si cae en el valor prohibido, salta uno más abajo
   const dec = () => {
     let next = Math.max(min, value - 1);
     if (forbiddenValue !== null && next === forbiddenValue) {
       next = Math.max(min, next - 1);
     }
-    // Solo actualizamos si realmente cambiamos y no terminamos en el prohibido
     if (next !== value && next !== forbiddenValue) onChange(next);
   };
 
-  // Al incrementar: si el siguiente valor es el prohibido, saltamos uno más arriba
+  // Al incrementar: si cae en el valor prohibido, salta uno más arriba
   const inc = () => {
     let next = Math.min(max ?? Infinity, value + 1);
     if (forbiddenValue !== null && next === forbiddenValue) {
@@ -23,20 +38,21 @@ export default function NumberStepper({ value, onChange, min = 0, max, forbidden
     if (next !== value && next !== forbiddenValue) onChange(next);
   };
 
-  // Calcula si se puede decrementar (contemplando el salto del prohibido)
+  // ¿Se puede decrementar? Tiene en cuenta el salto del prohibido
   const canDec = (() => {
-    if (value <= min) return false;
+    if (disabledDecrement || value <= min) return false;
     let next = value - 1;
     if (forbiddenValue !== null && next === forbiddenValue) next = next - 1;
-    return next >= min;
+    return next >= min && next !== forbiddenValue;
   })();
 
-  // Calcula si se puede incrementar (contemplando el salto del prohibido)
+  // ¿Se puede incrementar? Tiene en cuenta el salto del prohibido y disabledIncrement
   const canInc = (() => {
+    if (disabledIncrement) return false;
     if (max !== undefined && value >= max) return false;
     let next = value + 1;
     if (forbiddenValue !== null && next === forbiddenValue) next = next + 1;
-    return max === undefined || next <= max;
+    return (max === undefined || next <= max) && next !== forbiddenValue;
   })();
 
   const isForbidden = forbiddenValue !== null && value === forbiddenValue;
@@ -54,7 +70,7 @@ export default function NumberStepper({ value, onChange, min = 0, max, forbidden
         −
       </button>
 
-      {/* El número se muestra en rojo si está en el valor prohibido */}
+      {/* El número se muestra en rojo si el valor actual es el prohibido */}
       <span className={`w-8 text-center text-xl font-bold tabular-nums
         ${isForbidden ? 'text-red-500' : 'text-slate-900'}`}>
         {value}

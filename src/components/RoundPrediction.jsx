@@ -1,11 +1,12 @@
 // ── components/RoundPrediction.jsx ───────────────────────────────────────────
 // Paso A: cada jugador ingresa su pronóstico para la ronda actual.
 //
-// En modo 'obligado':
-//   - Se muestra quién reparte y el orden de carga (repartidor al final).
-//   - El repartidor tiene un valor prohibido que no puede elegir.
-//   - El valor prohibido = cartas_ronda - suma(pronósticos de los demás).
-//   - Si el repartidor elige ese valor, el botón "Confirmar" queda bloqueado.
+// Nuevas funcionalidades:
+//   - limitPredictionSum: bloquea el "+" cuando la suma global alcanza las cartas.
+//     El max efectivo de cada stepper = currentVal + remaining (cartas sin asignar).
+//   - Modo obligado: sigue funcionando de forma independiente.
+//     El valor prohibido del repartidor se computa sobre la suma de los demás.
+//   - Cuando ambas restricciones coexisten, el stepper respeta ambas.
 
 import { useState } from 'react';
 import NumberStepper from './NumberStepper';
@@ -16,6 +17,7 @@ import {
   getForbiddenDealerPrediction,
   isDealerPredictionValid,
 } from '../helpers/gameLogic';
+import { sumValues } from '../helpers/inputUtils';
 
 export default function RoundPrediction({ game, roundIndex, onConfirm, onHistoryClick, onResetClick }) {
   const { players, rounds, config } = game;
@@ -23,17 +25,16 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
   const roundNumber = roundIndex + 1;
   const totalRounds = rounds.length;
 
-  // Modalidad: retrocompatibilidad con partidas sin gameMode guardado
+  // Retrocompatibilidad: si no hay config guardada, usar defaults seguros
   const gameMode = config.gameMode || 'libre';
   const isObligado = gameMode === 'obligado';
+  const limitPredictionSum = config.limitPredictionSum !== false; // default true
 
-  // ── Repartidor de esta ronda ─────────────────────────────────────────────
+  // ── Repartidor ─────────────────────────────────────────────────────────────
   const dealer = getDealerForRound(roundIndex, players);
-
-  // En modo obligado el repartidor va al final; en libre, orden normal
   const predictionOrder = getPredictionOrder(players, dealer.id, gameMode);
 
-  // ── Estado: pronósticos de cada jugador ─────────────────────────────────
+  // ── Estado: pronósticos ────────────────────────────────────────────────────
   const [predictions, setPredictions] = useState(
     Object.fromEntries(players.map((p) => [p.id, 0]))
   );
@@ -41,9 +42,13 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
   const updatePrediction = (playerId, value) =>
     setPredictions((prev) => ({ ...prev, [playerId]: value }));
 
-  // ── Valor prohibido para el repartidor (modo obligado) ───────────────────
-  // Se recalcula de forma derivada con cada cambio de predictions.
-  // Es la única restricción que impide que la suma de pronósticos = cartas.
+  // ── Derivados: suma total y cartas restantes ────────────────────────────────
+  const totalPredictions = sumValues(predictions);
+  // Cuántas cartas quedan sin asignar (puede ser negativo si hay bug, pero nunca debería)
+  const globalRemaining = cards - totalPredictions;
+
+  // ── Valor prohibido para el repartidor (modo obligado) ─────────────────────
+  // Se recalcula reactivamente con cada cambio en predictions.
   const nonDealerPredictionValues = isObligado
     ? players.filter((p) => p.id !== dealer.id).map((p) => predictions[p.id])
     : [];
@@ -51,11 +56,21 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
     ? getForbiddenDealerPrediction(cards, nonDealerPredictionValues)
     : null;
 
-  // El confirm queda bloqueado si el repartidor eligió el valor prohibido
   const dealerPredictionInvalid =
     isObligado && !isDealerPredictionValid(predictions[dealer.id], forbidden);
 
-  // ── Confirmar pronósticos ────────────────────────────────────────────────
+  // ── Calcular el max efectivo para cada jugador ─────────────────────────────
+  // Si limitPredictionSum está activo, el max es: currentVal + globalRemaining
+  // Así el stepper bloquea el "+" cuando ya no hay cartas disponibles globalmente.
+  // Si está desactivo, el max siempre es el total de cartas de la ronda.
+  const getPlayerMax = (playerId) => {
+    if (!limitPredictionSum) return cards;
+    const currentVal = predictions[playerId];
+    // El jugador puede crecer hasta su valor actual + lo que queda global
+    return Math.min(cards, currentVal + Math.max(0, globalRemaining));
+  };
+
+  // ── Confirmar ──────────────────────────────────────────────────────────────
   const handleConfirm = () => {
     if (dealerPredictionInvalid) return;
     const result = players.map((p) => ({
@@ -65,11 +80,17 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
     onConfirm(result);
   };
 
+  // ── Mensaje de ayuda global ────────────────────────────────────────────────
+  const showLimitReached = limitPredictionSum && globalRemaining <= 0;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+
+      {/* ── Header ────────────────────────────────────────────────────────────── */}
       <header className="bg-indigo-700 px-4 py-4 shadow-lg">
         <div className="max-w-lg mx-auto">
+
+          {/* Fila: info de ronda + botones */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-3">
               <span className="text-indigo-200 text-sm font-medium">
@@ -103,7 +124,7 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
 
           <h2 className="text-white text-xl font-bold mt-2">Pronósticos</h2>
 
-          {/* Quién reparte + info de modalidad */}
+          {/* Reparte + modalidad */}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-indigo-200 text-xs">
               🃏 Reparte: <span className="font-semibold text-white">{dealer.name}</span>
@@ -115,17 +136,47 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
               </span>
             )}
           </div>
+
+          {/* Contador de cartas asignadas (solo si limitPredictionSum está activo) */}
+          {limitPredictionSum && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300
+                    ${globalRemaining <= 0 ? 'bg-emerald-400' : 'bg-white/60'}`}
+                  style={{ width: `${Math.min(100, (totalPredictions / cards) * 100)}%` }}
+                />
+              </div>
+              <span className={`text-xs font-medium whitespace-nowrap
+                ${globalRemaining <= 0 ? 'text-emerald-300' : 'text-indigo-200'}`}>
+                {totalPredictions}/{cards} asignadas
+              </span>
+            </div>
+          )}
         </div>
       </header>
 
-      {/* ── Lista de jugadores en orden de pronóstico ────────────────────────── */}
+      {/* ── Lista de jugadores ─────────────────────────────────────────────────── */}
       <main className="flex-1 px-4 py-5 max-w-lg mx-auto w-full">
+
+        {/* Aviso global cuando se alcanzó el límite */}
+        {showLimitReached && (
+          <div className="mb-3 bg-indigo-500/15 border border-indigo-400/40 rounded-xl px-4 py-2.5
+                          flex items-start gap-2">
+            <span className="text-indigo-300 text-sm mt-0.5">ℹ️</span>
+            <p className="text-indigo-200 text-sm">
+              Ya se asignaron todas las cartas disponibles para esta ronda.
+              Para cambiar un valor, primero bajá el de otro jugador.
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-3">
           {predictionOrder.map((player, orderIdx) => {
             const isDealer = player.id === dealer.id;
-            // El forbidden solo aplica al repartidor en modo obligado
-            const stepperForbidden = isObligado && isDealer ? forbidden : null;
             const currentVal = predictions[player.id];
+            const playerMax = getPlayerMax(player.id);
+            const stepperForbidden = isObligado && isDealer ? forbidden : null;
             const isInvalid = isDealer && isObligado && !isDealerPredictionValid(currentVal, forbidden);
 
             return (
@@ -138,10 +189,10 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
                       : 'bg-amber-500/10 border-amber-400/50'
                     : 'bg-white/10 border-white/20'}`}
               >
+                {/* Nombre + badges */}
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-white font-semibold">{player.name}</p>
-                    {/* Badge "Reparte" solo en modo obligado */}
                     {isDealer && isObligado && (
                       <span className="bg-amber-500/30 text-amber-300 text-xs px-2 py-0.5
                                        rounded-full border border-amber-400/50">
@@ -149,22 +200,22 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
                       </span>
                     )}
                   </div>
-                  {/* Número de orden en la ronda */}
                   <span className="text-slate-500 text-xs">#{orderIdx + 1}</span>
                 </div>
 
+                {/* Stepper */}
                 <div className="flex items-center justify-between mt-2">
                   <p className="text-slate-400 text-xs">Pronóstico</p>
                   <NumberStepper
                     value={currentVal}
                     onChange={(v) => updatePrediction(player.id, v)}
                     min={0}
-                    max={cards}
+                    max={playerMax}
                     forbiddenValue={stepperForbidden}
                   />
                 </div>
 
-                {/* Advertencia si el repartidor está en el valor prohibido */}
+                {/* Advertencia: repartidor en valor prohibido */}
                 {isDealer && isObligado && isInvalid && forbidden !== null && (
                   <p className="mt-2 text-red-300 text-xs bg-red-500/20 rounded-lg px-3 py-1.5">
                     ⚠️ <strong>{player.name}</strong> no puede pedir{' '}
@@ -173,7 +224,7 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
                   </p>
                 )}
 
-                {/* Info proactiva: muestra el valor prohibido aunque no esté seleccionado */}
+                {/* Info proactiva: valor prohibido (cuando no está en él) */}
                 {isDealer && isObligado && !isInvalid && forbidden !== null && (
                   <p className="mt-2 text-amber-300/70 text-xs">
                     No puede pedir: <strong className="text-amber-300">{forbidden}</strong>
@@ -185,7 +236,7 @@ export default function RoundPrediction({ game, roundIndex, onConfirm, onHistory
         </div>
       </main>
 
-      {/* ── Botón confirmar ──────────────────────────────────────────────────── */}
+      {/* ── Botón confirmar ────────────────────────────────────────────────────── */}
       <footer className="px-4 pt-2 max-w-lg mx-auto w-full">
         {dealerPredictionInvalid && (
           <p className="text-red-300 text-xs text-center mb-2">
