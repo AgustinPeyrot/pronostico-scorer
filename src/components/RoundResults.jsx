@@ -4,7 +4,7 @@
 // Reglas:
 //   - Mínimo 0, máximo cartas de la ronda, por jugador.
 //   - La suma total de manos ganadas debe ser exactamente igual a las cartas de la ronda.
-//   - El botón "+" se bloquea cuando ya no hay más manos para asignar.
+//   - El botón "+" se bloquea cuando ya no hay más manos disponibles para asignar.
 //   - El botón confirmar se habilita solo cuando la suma es exactamente correcta.
 
 import { useState } from 'react';
@@ -26,11 +26,13 @@ export default function RoundResults({
   const cards = rounds[roundIndex];
   const roundNumber = roundIndex + 1;
   const totalRounds = rounds.length;
-  const bonus = config?.bonus ?? 5;
 
-  // ── Estado inicial: todas las manos ganadas en 0 ───────────────────────────
-  const [won, setWon] = useState(() =>
-    Object.fromEntries(players.map((p) => [p.id, 0]))
+  // ── Estado: manos ganadas por jugador ──────────────────────────────────────
+  const [won, setWon] = useState(
+    Object.fromEntries(players.map((p) => {
+      const existing = predictions.find((pr) => pr.playerId === p.id);
+      return [p.id, existing?.won ?? 0];
+    }))
   );
   const [error, setError] = useState('');
 
@@ -41,9 +43,9 @@ export default function RoundResults({
   const totalWon = sumValues(won);
   const remaining = cards - totalWon;
 
-  // Max efectivo por jugador para bloquear el "+" cuando no hay más manos
+  // Max efectivo por jugador: bloquea el "+" cuando no hay más manos disponibles
   const getPlayerMax = (playerId) => {
-    const currentVal = won[playerId] ?? 0;
+    const currentVal = won[playerId];
     return Math.min(cards, currentVal + Math.max(0, remaining));
   };
 
@@ -53,7 +55,7 @@ export default function RoundResults({
       setError(
         `La suma de manos ganadas debe ser exactamente ${cards}. ` +
         `Ahora suma ${totalWon} ` +
-        `(${remaining > 0 ? `faltan ${remaining}` : `sobran ${Math.abs(remaining)}`}).`
+        `(${remaining > 0 ? `faltan ${remaining}` : `sobran ${-remaining}`}).`
       );
       return;
     }
@@ -61,18 +63,18 @@ export default function RoundResults({
     const results = players.map((p) => {
       const pred = predictions.find((pr) => pr.playerId === p.id);
       const prediction = pred?.prediction ?? 0;
-      const wonValue = won[p.id] ?? 0;
+      const wonValue = won[p.id];
       return {
         playerId: p.id,
         prediction,
         won: wonValue,
-        points: calcPlayerRoundScore(prediction, wonValue, bonus),
+        points: calcPlayerRoundScore(prediction, wonValue, config.bonus),
       };
     });
     onClose(results);
   };
 
-  // ── Colores del indicador de progreso ─────────────────────────────────────
+  // ── Colores del indicador ─────────────────────────────────────────────────
   const remainingColor =
     remaining === 0 ? 'text-emerald-400' :
     remaining > 0   ? 'text-amber-400'   : 'text-red-400';
@@ -101,6 +103,7 @@ export default function RoundResults({
               </span>
             </div>
 
+            {/* Botones sólidos — solo en modo normal, no en edición */}
             {!isEditing && (
               <div className="flex gap-2 shrink-0">
                 <button
@@ -125,7 +128,7 @@ export default function RoundResults({
             )}
           </div>
 
-          {/* Título + indicador textual de progreso */}
+          {/* Título + indicador textual */}
           <div className="mt-2">
             <h2 className="text-white text-xl font-bold">Resultados</h2>
             <p className={`text-sm font-medium mt-0.5 ${remainingColor}`}>
@@ -142,7 +145,7 @@ export default function RoundResults({
             <div className="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-                style={{ width: `${cards > 0 ? Math.min(100, (totalWon / cards) * 100) : 0}%` }}
+                style={{ width: `${Math.min(100, (totalWon / cards) * 100)}%` }}
               />
             </div>
             <span className={`text-xs font-medium whitespace-nowrap ${remainingColor}`}>
@@ -155,13 +158,14 @@ export default function RoundResults({
       {/* ── Lista de jugadores ─────────────────────────────────────────────────── */}
       <main className="flex-1 px-4 py-5 max-w-lg mx-auto w-full">
 
-        {/* Banner confirmación */}
+        {/* Banner cuando todas las manos están asignadas */}
         {remaining === 0 && (
           <div className="mb-3 bg-emerald-500/15 border border-emerald-400/40 rounded-xl px-4 py-2.5
                           flex items-center gap-2">
             <span className="text-emerald-400">✓</span>
             <p className="text-emerald-200 text-sm">
               Las {cards} mano{cards !== 1 ? 's' : ''} de la ronda están asignadas.
+              Podés confirmar o ajustar bajando algún valor.
             </p>
           </div>
         )}
@@ -170,50 +174,43 @@ export default function RoundResults({
           {players.map((player) => {
             const pred = predictions.find((pr) => pr.playerId === player.id);
             const prediction = pred?.prediction ?? 0;
-            const wonValue = won[player.id] ?? 0;
+            const wonValue = won[player.id];
             const hit = wonValue === prediction;
-            const pts = calcPlayerRoundScore(prediction, wonValue, bonus);
+            const pts = calcPlayerRoundScore(prediction, wonValue, config.bonus);
             const playerMax = getPlayerMax(player.id);
 
             return (
               <div
                 key={player.id}
                 className={`bg-white/10 backdrop-blur rounded-xl px-4 py-4 border transition-colors
-                  ${hit && wonValue > 0
-                    ? 'border-emerald-400/60 bg-emerald-500/5'
-                    : 'border-white/20'}`}
+                  ${hit ? 'border-emerald-400/60' : 'border-white/20'}`}
               >
-                {/* Fila superior: nombre + puntos en tiempo real */}
-                <div className="flex items-start justify-between mb-4">
+                {/* Nombre + puntos en tiempo real */}
+                <div className="flex items-center justify-between mb-3">
                   <div>
-                    <p className="text-white font-semibold text-base">{player.name}</p>
-                    <p className="text-slate-400 text-xs mt-0.5">
-                      Pidió: <span className="text-indigo-300 font-bold text-sm">{prediction}</span>
+                    <p className="text-white font-semibold">{player.name}</p>
+                    <p className="text-slate-400 text-xs">
+                      Pidió: <span className="text-indigo-300 font-bold">{prediction}</span>
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className={`text-lg font-bold ${hit && wonValue >= 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                    <p className={`text-lg font-bold ${hit ? 'text-emerald-400' : 'text-slate-300'}`}>
                       +{pts} pts
                     </p>
                     {hit && (
-                      <p className="text-emerald-400/80 text-xs">+{bonus} bonus ✓</p>
+                      <p className="text-emerald-400 text-xs">+{config.bonus} bonus ✓</p>
                     )}
                   </div>
                 </div>
 
-                {/* Área de manos ganadas — prominente y centrada */}
-                <div className="bg-white/5 border border-white/15 rounded-xl px-4 py-3">
-                  <p className="text-slate-300 text-xs text-center mb-3 font-medium uppercase tracking-wide">
-                    Manos ganadas
-                  </p>
-                  <div className="flex items-center justify-center gap-4">
-                    <NumberStepper
-                      value={wonValue}
-                      onChange={(v) => updateWon(player.id, v)}
-                      min={0}
-                      max={playerMax}
-                    />
-                  </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Manos ganadas:</span>
+                  <NumberStepper
+                    value={wonValue}
+                    onChange={(v) => updateWon(player.id, v)}
+                    min={0}
+                    max={playerMax}
+                  />
                 </div>
               </div>
             );
