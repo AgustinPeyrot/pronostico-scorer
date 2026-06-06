@@ -55,17 +55,36 @@ export function getDealerForRound(roundIndex, players) {
 }
 
 /**
- * Devuelve el orden en que los jugadores deben cargar sus pronósticos.
- * En modo 'obligado': el repartidor va al final.
- * En modo 'libre': orden normal.
+ * Devuelve el orden en que los jugadores deben cargar sus pedidos/pronósticos.
+ *
+ * En AMBOS modos el repartidor queda ÚLTIMO y la lista rota a partir del
+ * siguiente jugador en el orden original.
+ *
+ * Ejemplo: players = [agus, fabri, mozzi, lean], dealerId = fabri
+ *   → [mozzi, lean, agus, fabri]
+ *
+ * En modo 'libre' la rotación se aplica igual pero no hay valor prohibido.
+ * En modo 'obligado' (desafío) además el último tiene valor prohibido.
  */
-export function getPredictionOrder(players, dealerPlayerId, gameMode) {
-  if (gameMode !== 'obligado') return players;
-  const others = players.filter((p) => p.id !== dealerPlayerId);
-  const dealer = players.find((p) => p.id === dealerPlayerId);
-  // Si por algún motivo no se encuentra, devuelve el orden original
-  return dealer ? [...others, dealer] : players;
+export function getPredictionOrder(players, dealerPlayerId) {
+  const dealerIndex = players.findIndex((p) => p.id === dealerPlayerId);
+  if (dealerIndex === -1) return players; // fallback: orden original
+
+  // Jugadores que van DESPUÉS del repartidor en el orden circular
+  const afterDealer = players.slice(dealerIndex + 1);
+  // Jugadores que van ANTES del repartidor (incluye el inicio del array)
+  const beforeDealer = players.slice(0, dealerIndex);
+  // Repartidor siempre al final
+  const dealer = players[dealerIndex];
+
+  return [...afterDealer, ...beforeDealer, dealer];
 }
+
+/**
+ * Alias semántico de getPredictionOrder.
+ * Útil en pantallas de resultados para mantener consistencia visual.
+ */
+export const getPlayerOrderForRound = getPredictionOrder;
 
 /**
  * Calcula el valor prohibido para el pronóstico del repartidor en modo obligado.

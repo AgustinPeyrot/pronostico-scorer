@@ -1,7 +1,9 @@
 // ── components/Scoreboard.jsx ────────────────────────────────────────────────
 // Tabla de posiciones actualizada tras cada ronda.
 
+import { useState } from 'react';
 import Footer from './Footer';
+import ScoreboardModal from './ScoreboardModal';
 
 export default function Scoreboard({
   players,
@@ -19,9 +21,18 @@ export default function Scoreboard({
   const maxScore = ranked[0]?.total ?? 0;
   const isLastRound = currentRoundIndex >= totalRounds - 1;
   const medals = ['🥇', '🥈', '🥉'];
+  const [showScoreboard, setShowScoreboard] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col">
+    <>
+      {showScoreboard && (
+        <ScoreboardModal
+          players={players}
+          totals={totals}
+          onClose={() => setShowScoreboard(false)}
+        />
+      )}
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col">
 
       {/* ── Header ────────────────────────────────────────────────────────────── */}
       <header className="bg-slate-800 px-4 py-4 shadow-md border-b border-white/10">
@@ -34,11 +45,20 @@ export default function Scoreboard({
             </span>
 
             {/* Botones sólidos */}
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 shrink-0 flex-wrap">
+              <button
+                id="scoreboard-btn"
+                onClick={() => setShowScoreboard(true)}
+                className="flex items-center gap-1 bg-slate-600 hover:bg-slate-500
+                           active:bg-slate-700 text-white text-xs font-semibold
+                           px-3 py-2 rounded-lg shadow transition-colors"
+              >
+                🏆 Puntajes
+              </button>
               <button
                 id="history-btn"
                 onClick={onHistoryClick}
-                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600
+                className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600
                            active:bg-slate-800 text-white text-xs font-semibold
                            px-3 py-2 rounded-lg shadow transition-colors"
               >
@@ -47,7 +67,7 @@ export default function Scoreboard({
               <button
                 id="reset-btn"
                 onClick={onResetClick}
-                className="flex items-center gap-1.5 bg-red-900/70 hover:bg-red-800/80
+                className="flex items-center gap-1 bg-red-900/70 hover:bg-red-800/80
                            active:bg-red-950 text-red-300 text-xs font-semibold
                            px-3 py-2 rounded-lg shadow transition-colors"
               >
@@ -119,5 +139,6 @@ export default function Scoreboard({
 
       <Footer />
     </div>
+    </>
   );
 }
