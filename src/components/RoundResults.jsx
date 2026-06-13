@@ -1,22 +1,37 @@
 // ── components/RoundResults.jsx ──────────────────────────────────────────────
 // Paso B: se carga cuántas manos ganó cada jugador.
 //
+// Fuente de verdad única: el objeto `won` indexado por player.id.
+// Todos los cálculos (total, máx por jugador, validación) se derivan
+// EXCLUSIVAMENTE de los jugadores actuales (playerOrder), nunca de
+// Object.values(won), para evitar que claves residuales contaminen el total.
+//
 // Orden de jugadores:
-//   - Mismo orden que en pedidos: rota desde el siguiente al repartidor,
-//     repartidor al final. Garantiza consistencia visual entre ambas pantallas.
+//   - Mismo que en pedidos: rota desde el siguiente al repartidor.
+//   - El repartidor queda último. Aplica en ambos modos.
 //
 // Reglas de validación:
 //   - Mínimo 0, máximo cartas de la ronda, por jugador.
-//   - La suma total de manos ganadas debe ser exactamente igual a las cartas.
-//   - El botón "+" se bloquea cuando ya no hay más manos disponibles.
-//   - El botón confirmar se habilita solo cuando la suma es exactamente correcta.
+//   - La suma visible (solo jugadores actuales) debe ser exactamente igual a las cartas.
+//   - El "+" se bloquea cuando ya no hay manos disponibles según el total visible.
+//   - Confirmar solo se habilita cuando la suma visible === cartas.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import NumberStepper from './NumberStepper';
 import Footer from './Footer';
 import ScoreboardModal from './ScoreboardModal';
-import { calcPlayerRoundScore, getDealerForRound, getPredictionOrder } from '../helpers/gameLogic';
-import { sumValues } from '../helpers/inputUtils';
+import {
+  calcPlayerRoundScore,
+  getDealerForRound,
+  getPredictionOrder,
+} from '../helpers/gameLogic';
+
+// ── Normaliza un valor a entero en [0, max] ──────────────────────────────────
+function normalizeResult(value, max) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(parsed, 0), max);
+}
 
 export default function RoundResults({
   game,
@@ -37,27 +52,48 @@ export default function RoundResults({
   const dealer = getDealerForRound(roundIndex, players);
   const playerOrder = getPredictionOrder(players, dealer.id);
 
-  // ── Estado: manos ganadas ──────────────────────────────────────────────────
-  const [won, setWon] = useState(() =>
-    Object.fromEntries(players.map((p) => {
-      // En modo edición, pre-llenar con valores existentes
-      const existing = predictions.find((pr) => pr.playerId === p.id);
-      return [p.id, existing?.won ?? 0];
-    }))
-  );
-  const [error, setError] = useState('');
+  // ── Estado: manos ganadas, indexado siempre por player.id ─────────────────
+  // Se inicializa recorriendo SOLO los jugadores actuales.
+  // En edición: carga los valores guardados de esa ronda específica.
+  // En ronda nueva: todos en 0.
+  // Nunca reutiliza claves de rondas anteriores.
+  const [won, setWon] = useState(() => {
+    const init = {};
+    for (const p of players) {
+      if (isEditing) {
+        const saved = predictions.find((pr) => pr.playerId === p.id);
+        init[p.id] = normalizeResult(saved?.won, cards);
+      } else {
+        init[p.id] = 0;
+      }
+    }
+    return init;
+  });
 
-  // ── Modal de puntajes ──────────────────────────────────────────────────────
+  const [error, setError] = useState('');
   const [showScoreboard, setShowScoreboard] = useState(false);
 
-  const updateWon = (playerId, value) =>
-    setWon((prev) => ({ ...prev, [playerId]: value }));
+  // ── Actualización funcional: nunca muta el objeto anterior ────────────────
+  const updateWon = (playerId, value) => {
+    setWon((prev) => ({
+      ...prev,
+      [playerId]: normalizeResult(value, cards),
+    }));
+  };
 
-  // ── Derivados ─────────────────────────────────────────────────────────────
-  const totalWon = sumValues(won);
-  const remaining = cards - totalWon;
+  // ── Total derivado SOLO de los jugadores actuales ─────────────────────────
+  // Esto es la ÚNICA fuente de verdad para el indicador, el progreso,
+  // el bloqueo del "+" y la validación de confirmar.
+  // NO usa Object.values(won), porque won podría contener claves residuales
+  // si el componente se reutiliza sin reinicializar.
+  const assignedHands = useMemo(
+    () => playerOrder.reduce((total, p) => total + (won[p.id] ?? 0), 0),
+    [playerOrder, won]
+  );
 
-  // Max efectivo por jugador: bloquea "+" cuando no quedan manos disponibles
+  const remaining = cards - assignedHands;
+
+  // Max efectivo por jugador: bloquea "+" cuando no quedan manos por asignar
   const getPlayerMax = (playerId) => {
     const currentVal = won[playerId] ?? 0;
     return Math.min(cards, currentVal + Math.max(0, remaining));
@@ -65,15 +101,19 @@ export default function RoundResults({
 
   // ── Confirmar ──────────────────────────────────────────────────────────────
   const handleClose = () => {
-    if (totalWon !== cards) {
+    // Validación contra el total visible (jugadores actuales únicamente)
+    if (assignedHands !== cards) {
+      const diff = cards - assignedHands;
       setError(
-        `La suma de manos ganadas debe ser exactamente ${cards}. ` +
-        `Ahora suma ${totalWon} ` +
-        `(${remaining > 0 ? `faltan ${remaining}` : `sobran ${Math.abs(remaining)}`}).`
+        diff > 0
+          ? `Todavía faltan ${diff} mano${diff !== 1 ? 's' : ''} por asignar.`
+          : `Hay ${Math.abs(diff)} mano${Math.abs(diff) !== 1 ? 's' : ''} asignadas de más.`
       );
       return;
     }
     setError('');
+
+    // Construir resultados usando player.id como clave estable
     const results = players.map((p) => {
       const pred = predictions.find((pr) => pr.playerId === p.id);
       const prediction = pred?.prediction ?? 0;
@@ -88,7 +128,7 @@ export default function RoundResults({
     onClose(results);
   };
 
-  // ── Colores del indicador de progreso ─────────────────────────────────────
+  // ── Colores del indicador ─────────────────────────────────────────────────
   const remainingColor =
     remaining === 0 ? 'text-emerald-400' :
     remaining > 0   ? 'text-amber-400'   : 'text-red-400';
@@ -159,7 +199,7 @@ export default function RoundResults({
               )}
             </div>
 
-            {/* Título + progreso */}
+            {/* Título + progreso textual */}
             <div className="mt-2">
               <h2 className="text-white text-xl font-bold">Resultados</h2>
               <p className={`text-sm font-medium mt-0.5 ${remainingColor}`}>
@@ -176,11 +216,11 @@ export default function RoundResults({
               <div className="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-                  style={{ width: `${cards > 0 ? Math.min(100, (totalWon / cards) * 100) : 0}%` }}
+                  style={{ width: `${cards > 0 ? Math.min(100, (assignedHands / cards) * 100) : 0}%` }}
                 />
               </div>
               <span className={`text-xs font-medium whitespace-nowrap ${remainingColor}`}>
-                {totalWon}/{cards} manos
+                {assignedHands}/{cards} manos
               </span>
             </div>
           </div>
@@ -189,7 +229,7 @@ export default function RoundResults({
         {/* ── Lista de jugadores ─────────────────────────────────────────────────── */}
         <main className="flex-1 px-4 py-5 max-w-lg mx-auto w-full">
 
-          {/* Banner confirmación */}
+          {/* Banner cuando todas las manos están asignadas */}
           {remaining === 0 && (
             <div className="mb-3 bg-emerald-500/15 border border-emerald-400/40 rounded-xl px-4 py-2.5
                             flex items-center gap-2">
@@ -206,6 +246,7 @@ export default function RoundResults({
             {playerOrder.map((player) => {
               const pred = predictions.find((pr) => pr.playerId === player.id);
               const prediction = pred?.prediction ?? 0;
+              // wonValue proviene siempre de won[player.id]: misma fuente que assignedHands
               const wonValue = won[player.id] ?? 0;
               const hit = wonValue === prediction;
               const pts = calcPlayerRoundScore(prediction, wonValue, bonus);
@@ -235,7 +276,7 @@ export default function RoundResults({
                     </div>
                   </div>
 
-                  {/* Stepper de manos ganadas */}
+                  {/* Stepper: value y onChange usan el mismo won[player.id] */}
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-sm">Manos ganadas:</span>
                     <NumberStepper
@@ -260,7 +301,7 @@ export default function RoundResults({
           <button
             id="close-round-btn"
             onClick={handleClose}
-            disabled={totalWon !== cards}
+            disabled={assignedHands !== cards}
             className="w-full py-4 bg-violet-500 hover:bg-violet-400 active:bg-violet-600
                        text-white font-bold text-lg rounded-xl shadow-lg transition-colors
                        disabled:opacity-40"
